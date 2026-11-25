@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Для тебя</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Nunito', sans-serif;
+            background: radial-gradient(ellipse at 25% 20%, #3a233d 0%, transparent 55%),
+                        radial-gradient(ellipse at 78% 80%, #3d212e 0%, transparent 55%),
+                        radial-gradient(circle at 50% 48%, #261b33 0%, #151120 72%, #0c0914 100%);
+            color: #f3f4f6;
+        }
+        /* Мягкие парящие боке-блики на фоне для эстетики */
+        .bokeh {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(48px);
+            pointer-events: none;
+            z-index: 0;
+            animation: bokehDrift var(--b-dur, 12s) ease-in-out infinite alternate;
+        }
+        @keyframes bokehDrift {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(var(--bx, 25px), var(--by, -20px)) scale(1.15); }
+        }
+        /* Тёплое фоновое свечение за котиком */
+        #ambient-glow {
+            position: absolute;
+            top: 52%;
+            left: 50%;
+            width: 310px;
+            height: 310px;
+            transform: translate(-50%, -50%) scale(0.75);
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 183, 120, 0.26) 0%, rgba(251, 113, 133, 0.14) 48%, rgba(0, 0, 0, 0) 74%);
+            pointer-events: none;
+            transition: transform 0.8s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.8s ease;
+            opacity: 0.45;
+            z-index: 1;
+        }
+        /* Звёзды и искорки на фоне */
+        .star {
+            position: absolute;
+            background: #fff5eb;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0.25;
+            box-shadow: 0 0 6px rgba(255, 220, 190, 0.6);
+            animation: twinkle var(--dur, 4s) ease-in-out infinite alternate;
+        }
+        @keyframes twinkle {
+            0% { opacity: 0.15; transform: scale(0.85); }
+            100% { opacity: 0.75; transform: scale(1.25); }
+        }
+        /* Сцена выхода и ухода котика */
+        #cat-stage-wrapper {
+            position: relative;
+            width: 280px;
+            height: 260px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+            cursor: grab;
+            z-index: 10;
+            transform: translateX(-115vw);
+            transition: transform 2.1s cubic-bezier(0.25, 0.9, 0.35, 1);
+            will-change: transform;
+        }
+        #cat-stage-wrapper:active {
+            cursor: grabbing;
+        }
+        #cat-stage-wrapper.arrived {
+            transform: translateX(0);
+        }
+        #cat-stage-wrapper.leaving {
+            transform: translateX(115vw);
+            transition: transform 2.3s cubic-bezier(0.45, 0.05, 0.75, 0.9);
+        }
+        /* Анимация походки */
+        @keyframes walkBob {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            25% { transform: translateY(-6px) rotate(-1.5deg); }
+            75% { transform: translateY(-6px) rotate(1.5deg); }
+        }
+        @keyframes walkLegFront {
+            0%, 100% { transform: rotate(-16deg); }
+            50% { transform: rotate(16deg); }
+        }
+        @keyframes walkLegBack {
+            0%, 100% { transform: rotate(16deg); }
+            50% { transform: rotate(-16deg); }
+        }
+        .walking #cat-body-group {
+            animation: walkBob 0.42s ease-in-out infinite;
+        }
+        .walking #leg-fl, .walking #leg-br {
+            transform-origin: 120px 175px;
+            animation: walkLegFront 0.42s ease-in-out infinite;
+        }
+        .walking #leg-fr, .walking #leg-bl {
+            transform-origin: 155px 175px;
+            animation: walkLegBack 0.42s ease-in-out infinite;
+        }
+        #cat-svg * {
+            transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease;
+        }
+        /* Поза: сидит (0-4) vs стоит (5) */
+        .pose-sitting #cat-torso {
+            transform: translateY(8px) scaleY(0.95);
+            transform-origin: 140px 195px;
+        }
+        .pose-sitting #cat-head-group {
+            transform: translateY(12px);
+        }
+        .pose-sitting #standing-legs {
+            opacity: 0;
+            transform: translateY(-6px);
+        }
+        .pose-sitting #sitting-paws {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .pose-standing #cat-torso {
+            transform: translateY(-4px) scaleY(1.03);
+            transform-origin: 140px 195px;
+        }
+        .pose-standing #cat-head-group {
+            transform: translateY(-6px);
+        }
+        .pose-standing #standing-legs {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .pose-standing #sitting-paws {
+            opacity: 0;
+            transform: translateY(6px);
+        }
+        /* Анимация слёзок по бокам глаз (видна только на этапе 0) */
+        @keyframes tearDropLeft {
+            0% { opacity: 0; transform: translate(0px, 0px) scale(0.6); }
+            25% { opacity: 0.9; transform: translate(-3px, 4px) scale(1); }
+            80% { opacity: 0.85; transform: translate(-7px, 16px) scale(0.95); }
+            100% { opacity: 0; transform: translate(-9px, 23px) scale(0.5); }
+        }
+        @keyframes tearDropRight {
+            0% { opacity: 0; transform: translate(0px, 0px) scale(0.6); }
+            25% { opacity: 0.9; transform: translate(3px, 4px) scale(1); }
+            80% { opacity: 0.85; transform: translate(7px, 16px) scale(0.95); }
+            100% { opacity: 0; transform: translate(9px, 23px) scale(0.5); }
+        }
+        #tears-group {
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        .mood-0 #tears-group { opacity: 1; }
+        .mood-0 #tear-l1 { animation: tearDropLeft 2.2s ease-in infinite; }
+        .mood-0 #tear-l2 { animation: tearDropLeft 2.2s ease-in 1.1s infinite; }
+        .mood-0 #tear-r1 { animation: tearDropRight 2.2s ease-in 0.4s infinite; }
+        .mood-0 #tear-r2 { animation: tearDropRight 2.2s ease-in 1.5s infinite; }
+        /* Хвост */
+        @keyframes tailSad {
+            0%, 100% { transform: rotate(12deg); }
+            50% { transform: rotate(18deg); }
+        }
+        @keyframes tailCalm {
+            0%, 100% { transform: rotate(-4deg); }
+            50% { transform: rotate(8deg); }
+        }
+        @keyframes tailHappy {
+            0%, 100% { transform: rotate(-16deg); }
+            50% { transform: rotate(18deg); }
+        }
+        #cat-tail { transform-origin: 182px 175px; }
+        .mood-0 #cat-tail { animation: tailSad 3.6s ease-in-out infinite; }
+        .mood-1 #cat-tail { animation: tailCalm 2.8s ease-in-out infinite; }
+        .mood-2 #cat-tail { animation: tailCalm 2.1s ease-in-out infinite; }
+        .mood-3 #cat-tail { animation: tailHappy 1.5s ease-in-out infinite; }
+        .mood-4 #cat-tail { animation: tailHappy 1.1s ease-in-out infinite; }
+        .mood-5 #cat-tail { animation: tailHappy 0.75s ease-in-out infinite; }
+        /* Ушки */
+        #ear-left { transform-origin: 105px 86px; }
+        #ear-right { transform-origin: 175px 86px; }
+        .mood-0 #ear-left { transform: rotate(-22deg) translateY(4px); }
+        .mood-0 #ear-right { transform: rotate(22deg) translateY(4px); }
+        .mood-1 #ear-left { transform: rotate(-10deg) translateY(2px); }
+        .mood-1 #ear-right { transform: rotate(10deg) translateY(2px); }
+        .mood-2 #ear-left, .mood-3 #ear-left, .mood-4 #ear-left { transform: rotate(0deg); }
+        .mood-2 #ear-right, .mood-3 #ear-right, .mood-4 #ear-right { transform: rotate(0deg); }
+        .mood-5 #ear-left { transform: rotate(4deg) translateY(-2px); }
+        .mood-5 #ear-right { transform: rotate(-4deg) translateY(-2px); }
+        /* Мурчание */
+        @keyframes purrWiggle {
+            0%, 100% { transform: scale(1, 1); }
+            50% { transform: scale(1.028, 0.978); }
+        }
+        .mood-4 #cat-body-group, .mood-5 #cat-body-group {
+            animation: purrWiggle 0.9s ease-in-out infinite;
+            transform-origin: 140px 190px;
+        }
+        .walking.mood-5 #cat-body-group {
+            animation: walkBob 0.34s ease-in-out infinite;
+        }
+        .petting-squash #cat-svg {
+            transform: scale(1.05, 0.94) translateY(4px);
+        }
+        /* Всплывающие сердечки */
+        .floating-particle {
+            position: fixed;
+            pointer-events: none;
+            z-index: 50;
+            animation: floatUp 1.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            will-change: transform, opacity;
+        }
+        @keyframes floatUp {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.4) rotate(-10deg);
+            }
+            20% {
+                opacity: 1;
+                transform: translate(-50%, -90%) scale(1.15) rotate(6deg);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(calc(-50% + var(--dx, 0px)), -195%) scale(0.75) rotate(var(--rot, 15deg));
+            }
+        }
+        /* Подсказка жеста поглаживания */
+        @keyframes swipeHint {
+            0% { transform: translateX(-28px) scale(0.95); opacity: 0; }
+            25% { opacity: 0.85; }
+            75% { opacity: 0.85; }
+            100% { transform: translateX(28px) scale(0.95); opacity: 0; }
+        }
+        .hand-hint-anim {
+            animation: swipeHint 2s ease-in-out infinite;
+        }
+        .heart-step {
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.4s ease, filter 0.4s ease;
+        }
+        .heart-step.filled {
+            transform: scale(1.22);
+            filter: drop-shadow(0 0 8px rgba(251, 113, 133, 0.7));
+        }
+        /* Убегающая кнопка в конце */
+        #runaway-btn {
+            position: fixed;
+            z-index: 40;
+            padding: 13px 26px;
+            border-radius: 9999px;
+            font-weight: 800;
+            font-size: 16px;
+            letter-spacing: 0.3px;
+            color: #fff;
+            background: linear-gradient(135deg, #fb7185 0%, #f43f5e 55%, #fb923c 100%);
+            border: 1.5px solid rgba(255, 255, 255, 0.35);
+            box-shadow: 0 10px 28px rgba(244, 63, 94, 0.45), 0 0 20px rgba(251, 146, 60, 0.3);
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: left 0.36s cubic-bezier(0.22, 1.25, 0.36, 1),
+                        top 0.36s cubic-bezier(0.22, 1.25, 0.36, 1),
+                        opacity 0.6s ease,
+                        transform 0.3s ease;
+            will-change: left, top, transform;
+        }
+        #runaway-btn.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-between min-h-screen px-5 py-8 sm:py-12 relative">
+    <!-- Эстетичные мягкие блики на фоне -->
+    <div class="bokeh" style="width: 300px; height: 300px; top: 8%; left: -6%; background: rgba(244, 114, 182, 0.14); --bx: 35px; --by: 25px; --b-dur: 14s;"></div>
+    <div class="bokeh" style="width: 340px; height: 340px; bottom: 6%; right: -8%; background: rgba(251, 146, 60, 0.13); --bx: -30px; --by: -25px; --b-dur: 16s;"></div>
+    <div class="bokeh" style="width: 240px; height: 240px; top: 45%; right: 10%; background: rgba(192, 132, 252, 0.1); --bx: -20px; --by: 30px; --b-dur: 11s;"></div>
+
+    <!-- Кнопка звука -->
+    <button id="mute-btn" type="button" aria-label="Переключить звук" class="fixed top-4 right-4 z-30 p-2.5 rounded-full bg-white/[0.08] hover:bg-white/15 border border-white/15 text-rose-100 transition-all active:scale-95 backdrop-blur-md">
+        <svg id="icon-sound-on" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+        </svg>
+        <svg id="icon-sound-off" class="w-5 h-5 hidden text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="23" y1="9" x2="17" y2="15"></line>
+            <line x1="17" y1="9" x2="23" y2="15"></line>
+        </svg>
+    </button>
+
+    <!-- Звёздное небо -->
+    <div id="stars-container" class="fixed inset-0 pointer-events-none z-0"></div>
+    <!-- Мягкое свечение -->
+    <div id="ambient-glow"></div>
+
+    <!-- Верхний текст -->
+    <header class="w-full max-w-md text-center z-20 pt-2 sm:pt-4 min-h-[115px] flex flex-col items-center justify-center">
+        <div id="message-box" class="opacity-0 translate-y-2 transition-all duration-700 ease-out">
+            <h1 id="main-title" class="text-xl sm:text-2xl font-bold leading-snug text-amber-50 tracking-wide drop-shadow-sm">
+                Котику тоже грустно.
+            </h1>
+            <p id="sub-title" class="mt-1.5 text-base sm:text-lg font-medium text-rose-200/95 leading-relaxed">
+                Погладь, чтобы ему стало весело
+            </p>
+        </div>
+    </header>
+
+    <!-- Сцена с котиком -->
+    <main class="relative flex flex-col items-center justify-center flex-1 w-full max-w-md z-10">
+        <div id="cat-stage-wrapper" class="walking pose-sitting mood-0" aria-label="Рыжий котик, которого можно погладить">
+            <!-- Подсказка жеста -->
+            <div id="gesture-hint" class="opacity-0 transition-opacity duration-500 pointer-events-none absolute top-14 z-30 flex flex-col items-center">
+                <div class="hand-hint-anim bg-white/15 backdrop-blur-md border border-white/20 rounded-full p-2.5 shadow-lg">
+                    <svg class="w-6 h-6 text-amber-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/>
+                        <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/>
+                        <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/>
+                        <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Векторный рыжий котик -->
+            <svg id="cat-svg" viewBox="0 0 280 250" class="w-full h-full overflow-visible drop-shadow-[0_16px_26px_rgba(0,0,0,0.48)]">
+                <defs>
+                    <!-- Основная тёплая рыжая шёрстка -->
+                    <linearGradient id="furGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#ffb067"/>
+                        <stop offset="55%" stop-color="#f58a3e"/>
+                        <stop offset="100%" stop-color="#de6b28"/>
+                    </linearGradient>
+                    <!-- Более глубокий терракотово-рыжий для полосок и акцентов -->
+                    <linearGradient id="stripeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#d9581e"/>
+                        <stop offset="100%" stop-color="#b84214"/>
+                    </linearGradient>
+                    <!-- Кремово-молочный для грудки, мордочки и кончиков лапок -->
+                    <linearGradient id="creamGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#fff8ee"/>
+                        <stop offset="100%" stop-color="#fae6cf"/>
+                    </linearGradient>
+                    <radialGradient id="blushGrad" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#ff6b8b" stop-opacity="0.72"/>
+                        <stop offset="100%" stop-color="#ff6b8b" stop-opacity="0"/>
+                    </radialGradient>
+                    <linearGradient id="tearGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#bae6fd" stop-opacity="0.95"/>
+                        <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.85"/>
+                    </linearGradient>
+                </defs>
+
+                <!-- Тень на полу -->
+                <ellipse cx="140" cy="212" rx="68" ry="12" fill="rgba(0, 0, 0, 0.35)"/>
+
+                <g id="cat-body-group">
+                    <!-- Пушистый рыжий хвост с кремовым кончиком -->
+                    <path id="cat-tail" d="M 178 175 C 218 168, 232 132, 215 112 C 206 102, 194 110, 200 122 C 208 136, 196 154, 174 160" 
+                          fill="none" stroke="url(#furGrad)" stroke-width="16" stroke-linecap="round"/>
+
+                    <!-- Лапки для ходьбы и стояния -->
+                    <g id="standing-legs">
+                        <rect id="leg-bl" x="156" y="168" width="16" height="40" rx="8" fill="#d96726"/>
+                        <rect id="leg-br" x="168" y="170" width="16" height="40" rx="8" fill="url(#furGrad)"/>
+                        <rect id="leg-fl" x="104" y="168" width="16" height="40" rx="8" fill="#d96726"/>
+                        <rect id="leg-fr" x="118" y="170" width="16" height="40" rx="8" fill="url(#furGrad)"/>
+                    </g>
+
+                    <!-- Туловище -->
+                    <g id="cat-torso">
+                        <rect x="92" y="122" width="96" height="76" rx="42" fill="url(#furGrad)"/>
+                        <!-- Рыжие полосочки на спинке -->
+                        <path d="M 175 142 Q 165 144 162 148" fill="none" stroke="url(#stripeGrad)" stroke-width="4" stroke-linecap="round" opacity="0.65"/>
+                        <path d="M 181 155 Q 170 156 166 160" fill="none" stroke="url(#stripeGrad)" stroke-width="4" stroke-linecap="round" opacity="0.65"/>
+                        <!-- Светлая кремовая грудка -->
+                        <ellipse cx="132" cy="163" rx="25" ry="27" fill="url(#creamGrad)" opacity="0.92"/>
+                    </g>
+
+                    <!-- Сидячие передние лапки с белыми носочками -->
+                    <g id="sitting-paws">
+                        <rect x="112" y="174" width="18" height="34" rx="9" fill="url(#furGrad)" stroke="#d96726" stroke-width="1.2"/>
+                        <path d="M 113 197 L 129 197 L 129 200 C 129 204.5 125.5 207.5 121 207.5 C 116.5 207.5 113 204.5 113 200 Z" fill="url(#creamGrad)"/>
+                        <rect x="144" y="174" width="18" height="34" rx="9" fill="url(#furGrad)" stroke="#d96726" stroke-width="1.2"/>
+                        <path d="M 145 197 L 161 197 L 161 200 C 161 204.5 157.5 207.5 153 207.5 C 148.5 207.5 145 204.5 145 200 Z" fill="url(#creamGrad)"/>
+                    </g>
+
+                    <!-- Голова и мордочка -->
+                    <g id="cat-head-group">
+                        <!-- Левое ушко -->
+                        <g id="ear-left">
+                            <path d="M 94 94 L 84 48 C 83 42, 90 39, 95 43 L 124 68 Z" fill="url(#furGrad)"/>
+                            <path d="M 96 86 L 90 55 L 114 72 Z" fill="#ffb8c6"/>
+                        </g>
+                        <!-- Правое ушко -->
+                        <g id="ear-right">
+                            <path d="M 186 94 L 196 48 C 197 42, 190 39, 185 43 L 156 68 Z" fill="url(#furGrad)"/>
+                            <path d="M 184 86 L 190 55 L 166 72 Z" fill="#ffb8c6"/>
+                        </g>
+
+                        <!-- Голова -->
+                        <ellipse cx="140" cy="104" rx="54" ry="44" fill="url(#furGrad)"/>
+
+                        <!-- Милые рыжие полосочки на лбу и по бокам -->
+                        <g stroke="url(#stripeGrad)" stroke-width="3.5" stroke-linecap="round" fill="none" opacity="0.72">
+                            <path d="M 140 64 L 140 75"/>
+                            <path d="M 131 66 L 132 74"/>
+                            <path d="M 149 66 L 148 74"/>
+                            <path d="M 90 96 L 100 98"/>
+                            <path d="M 190 96 L 180 98"/>
+                        </g>
+
+                        <!-- Светлая кремовая область вокруг мордочки -->
+                        <ellipse cx="140" cy="117" rx="24" ry="17" fill="url(#creamGrad)" opacity="0.88"/>
+
+                        <!-- Румянец -->
+                        <ellipse id="cheek-left" cx="104" cy="116" rx="13" ry="8" fill="url(#blushGrad)" opacity="0"/>
+                        <ellipse id="cheek-right" cx="176" cy="116" rx="13" ry="8" fill="url(#blushGrad)" opacity="0"/>
+
+                        <!-- Усики -->
+                        <g stroke="#fff3e6" stroke-width="2" stroke-linecap="round" opacity="0.82">
+                            <line x1="88" y1="108" x2="66" y2="104"/>
+                            <line x1="88" y1="115" x2="68" y2="117"/>
+                            <line x1="192" y1="108" x2="214" y2="104"/>
+                            <line x1="192" y1="115" x2="212" y2="117"/>
+                        </g>
+
+                        <!-- Слёзки по бокам глазок (активны на этапе 0) -->
+                        <g id="tears-group">
+                            <ellipse cx="108" cy="107" rx="3.2" ry="2" fill="#7dd3fc" opacity="0.85"/>
+                            <ellipse cx="172" cy="107" rx="3.2" ry="2" fill="#7dd3fc" opacity="0.85"/>
+                            <path id="tear-l1" d="M 106 108 C 103 113, 102 116, 105 117 C 108 118, 109 114, 106 108 Z" fill="url(#tearGrad)"/>
+                            <path id="tear-l2" d="M 106 108 C 103 113, 102 116, 105 117 C 108 118, 109 114, 106 108 Z" fill="url(#tearGrad)"/>
+                            <path id="tear-r1" d="M 174 108 C 177 113, 178 116, 175 117 C 172 118, 171 114, 174 108 Z" fill="url(#tearGrad)"/>
+                            <path id="tear-r2" d="M 174 108 C 177 113, 178 116, 175 117 C 172 118, 171 114, 174 108 Z" fill="url(#tearGrad)"/>
+                        </g>
+
+                        <!-- Открытые глаза -->
+                        <g id="eyes-open">
+                            <circle cx="118" cy="102" r="8.8" fill="#2b2129"/>
+                            <circle id="pupil-l" cx="116" cy="104" r="3.2" fill="#ffffff"/>
+                            <circle cx="121" cy="99" r="1.5" fill="#ffffff" opacity="0.9"/>
+                            <path id="brow-l" d="M 108 91 Q 118 87 126 93" fill="none" stroke="#9e4318" stroke-width="2.4" stroke-linecap="round"/>
+                            <circle cx="162" cy="102" r="8.8" fill="#2b2129"/>
+                            <circle id="pupil-r" cx="160" cy="104" r="3.2" fill="#ffffff"/>
+                            <circle cx="165" cy="99" r="1.5" fill="#ffffff" opacity="0.9"/>
+                            <path id="brow-r" d="M 172 91 Q 162 87 154 93" fill="none" stroke="#9e4318" stroke-width="2.4" stroke-linecap="round"/>
+                        </g>
+
+                        <!-- Счастливые глазки ^ ^ -->
+                        <g id="eyes-happy" opacity="0">
+                            <path d="M 109 104 Q 118 92 127 104" fill="none" stroke="#2b2129" stroke-width="3.5" stroke-linecap="round"/>
+                            <path d="M 153 104 Q 162 92 171 104" fill="none" stroke="#2b2129" stroke-width="3.5" stroke-linecap="round"/>
+                        </g>
+
+                        <!-- Розовый носик -->
+                        <path d="M 136 111 Q 140 109 144 111 L 140 116 Z" fill="#ff7597"/>
+
+                        <!-- Грустный ротик -->
+                        <path id="mouth-sad" d="M 132 124 Q 140 118 148 124" fill="none" stroke="#5c3d35" stroke-width="2.5" stroke-linecap="round"/>
+
+                        <!-- Кошачья улыбка -->
+                        <path id="mouth-happy" d="M 129 120 Q 134.5 126 140 119 Q 145.5 126 151 120" fill="none" stroke="#5c3d35" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+                    </g>
+                </g>
+            </svg>
+        </div>
+    </main>
+
+    <!-- Убегающая кнопка в конце -->
+    <button id="runaway-btn" type="button">Нажми ♥</button>
+
+    <!-- Нижняя панель со шкалой настроения -->
+    <footer class="w-full max-w-sm flex flex-col items-center z-20 pb-2 sm:pb-4">
+        <div id="progress-panel" class="w-full bg-white/[0.08] backdrop-blur-md border border-white/15 rounded-2xl px-5 py-3.5 shadow-xl opacity-0 translate-y-3 transition-all duration-700">
+            <div class="flex items-center justify-between text-xs font-semibold text-rose-100/90 mb-2.5">
+                <span id="mood-label">Грустит...</span>
+                <span id="step-counter" class="text-amber-300 font-bold">0 / 5</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-950/60 rounded-full overflow-hidden p-0.5 border border-white/10">
+                <div id="progress-fill" class="h-full w-0 rounded-full bg-gradient-to-r from-rose-400 via-pink-400 to-amber-300 transition-all duration-500 ease-out shadow-[0_0_12px_rgba(251,113,133,0.65)]"></div>
+            </div>
+            <div class="flex items-center justify-between mt-3 px-1" id="hearts-row">
+                <span class="heart-step text-slate-500/80 text-lg" data-step="1">♥</span>
+                <span class="heart-step text-slate-500/80 text-lg" data-step="2">♥</span>
+                <span class="heart-step text-slate-500/80 text-lg" data-step="3">♥</span>
+                <span class="heart-step text-slate-500/80 text-lg" data-step="4">♥</span>
+                <span class="heart-step text-slate-500/80 text-lg" data-step="5">♥</span>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            const MAX_PETS = 5;
+            let petCount = 0;
+            let isReadyToPet = false;
+            let isPointerDown = false;
+            let lastX = 0;
+            let lastY = 0;
+            let strokeDistance = 0;
+            let lastPetTimestamp = 0;
+            let particleThrottle = 0;
+            let audioCtx = null;
+            let isMuted = false;
+            let leaveTimer = null;
+
+            const STROKE_THRESHOLD = 48;
+            const PET_COOLDOWN = 420;
+
+            const catWrapper = document.getElementById('cat-stage-wrapper');
+            const messageBox = document.getElementById('message-box');
+            const mainTitle = document.getElementById('main-title');
+            const subTitle = document.getElementById('sub-title');
+            const progressPanel = document.getElementById('progress-panel');
+            const progressFill = document.getElementById('progress-fill');
+            const stepCounter = document.getElementById('step-counter');
+            const moodLabel = document.getElementById('mood-label');
+            const heartSteps = document.querySelectorAll('.heart-step');
+            const gestureHint = document.getElementById('gesture-hint');
+            const ambientGlow = document.getElementById('ambient-glow');
+            const runawayBtn = document.getElementById('runaway-btn');
+            const muteBtn = document.getElementById('mute-btn');
+            const iconSoundOn = document.getElementById('icon-sound-on');
+            const iconSoundOff = document.getElementById('icon-sound-off');
+            const eyesOpen = document.getElementById('eyes-open');
+            const eyesHappy = document.getElementById('eyes-happy');
+            const mouthSad = document.getElementById('mouth-sad');
+            const mouthHappy = document.getElementById('mouth-happy');
+            const cheekLeft = document.getElementById('cheek-left');
+            const cheekRight = document.getElementById('cheek-right');
+            const browL = document.getElementById('brow-l');
+            const browR = document.getElementById('brow-r');
+            const pupilL = document.getElementById('pupil-l');
+            const pupilR = document.getElementById('pupil-r');
+
+            const moodDescriptions = [
+                'Грустит...',
+                'Слёзки высохли, чуть теплее',
+                'Уже улыбается',
+                'Щурится от удовольствия',
+                'Мурчит от радости!',
+                'Счастлив!'
+            ];
+
+            function createStars() {
+                const container = document.getElementById('stars-container');
+                for (let i = 0; i < 42; i++) {
+                    const star = document.createElement('div');
+                    star.className = 'star';
+                    const size = Math.random() * 2.6 + 1;
+                    star.style.width = `${size}px`;
+                    star.style.height = `${size}px`;
+                    star.style.left = `${Math.random() * 100}%`;
+                    star.style.top = `${Math.random() * 100}%`;
+                    star.style.setProperty('--dur', `${(Math.random() * 3 + 2.5).toFixed(1)}s`);
+                    star.style.animationDelay = `${(Math.random() * 3).toFixed(1)}s`;
+                    container.appendChild(star);
+                }
+            }
+
+            function playSoftPurr(intensity) {
+                if (isMuted) return;
+                try {
+                    if (!audioCtx) {
+                        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                        if (AudioContextClass) {
+                            audioCtx = new AudioContextClass();
+                        }
+                    }
+                    if (!audioCtx) return;
+                    if (audioCtx.state === 'suspended') {
+                        audioCtx.resume();
+                    }
+                    const now = audioCtx.currentTime;
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    const lfo = audioCtx.createOscillator();
+                    const lfoGain = audioCtx.createGain();
+
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(52 + intensity * 3, now);
+                    lfo.type = 'sine';
+                    lfo.frequency.setValueAtTime(24, now);
+                    lfoGain.gain.setValueAtTime(14, now);
+
+                    lfo.connect(lfoGain);
+                    lfoGain.connect(osc.frequency);
+
+                    gain.gain.setValueAtTime(0.001, now);
+                    gain.gain.linearRampToValueAtTime(0.06, now + 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    lfo.start(now);
+                    osc.stop(now + 0.58);
+                    lfo.stop(now + 0.58);
+
+                    const chime = audioCtx.createOscillator();
+                    const chimeGain = audioCtx.createGain();
+                    const notes = [523.25, 587.33, 659.25, 783.99, 1046.5];
+                    chime.type = 'sine';
+                    chime.frequency.setValueAtTime(notes[Math.min(intensity - 1, notes.length - 1)], now);
+                    chimeGain.gain.setValueAtTime(0.001, now);
+                    chimeGain.gain.linearRampToValueAtTime(0.04, now + 0.03);
+                    chimeGain.gain.exponentialRampToValueAtTime(0.0008, now + 0.45);
+                    chime.connect(chimeGain);
+                    chimeGain.connect(audioCtx.destination);
+                    chime.start(now);
+                    chime.stop(now + 0.48);
+                } catch (e) {}
+            }
+
+            function spawnParticle(x, y, isBurst) {
+                const symbols = ['♥', '✦', '♥', '✨', '♡'];
+                const colors = ['#fda4af', '#fb7185', '#fcd34d', '#f9a8d4', '#fdba74'];
+                const el = document.createElement('div');
+                el.className = 'floating-particle';
+                el.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+                el.style.color = colors[Math.floor(Math.random() * colors.length)];
+                el.style.fontSize = isBurst ? `${Math.random() * 14 + 16}px` : `${Math.random() * 10 + 13}px`;
+                el.style.left = `${x}px`;
+                el.style.top = `${y}px`;
+                el.style.setProperty('--dx', `${(Math.random() - 0.5) * (isBurst ? 140 : 60)}px`);
+                el.style.setProperty('--rot', `${(Math.random() - 0.5) * 45}deg`);
+                document.body.appendChild(el);
+                setTimeout(() => {
+                    if (el.parentNode) el.parentNode.removeChild(el);
+                }, 1200);
+            }
+
+            function celebrateBurst() {
+                const rect = catWrapper.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                for (let i = 0; i < 18; i++) {
+                    setTimeout(() => {
+                        const offsetX = (Math.random() - 0.5) * 140;
+                        const offsetY = (Math.random() - 0.5) * 90;
+                        spawnParticle(centerX + offsetX, centerY + offsetY, true);
+                    }, i * 50);
+                }
+            }
+
+            /* Логика убегающей кнопки "Нажми ♥" */
+            let runawayActive = false;
+            let lastEscapeTime = 0;
+
+            function showRunawayButton() {
+                runawayActive = true;
+                const btnWidth = 148;
+                const btnHeight = 48;
+                const startX = (window.innerWidth - btnWidth) / 2;
+                const startY = window.innerHeight * 0.55;
+                runawayBtn.style.left = `${startX}px`;
+                runawayBtn.style.top = `${startY}px`;
+                runawayBtn.classList.add('visible');
+            }
+
+            function escapeButton(pointerX, pointerY) {
+                if (!runawayActive) return;
+                const now = Date.now();
+                if (now - lastEscapeTime < 90) return;
+                lastEscapeTime = now;
+
+                const rect = runawayBtn.getBoundingClientRect();
+                const btnW = rect.width || 148;
+                const btnH = rect.height || 48;
+                const padding = 24;
+                const maxX = Math.max(padding, window.innerWidth - btnW - padding);
+                const maxY = Math.max(padding + 60, window.innerHeight - btnH - 135);
+                const minY = 95;
+
+                let newX = padding + Math.random() * (maxX - padding);
+                let newY = minY + Math.random() * (maxY - minY);
+
+                // Выбираем точку подальше от курсора/пальца
+                for (let attempt = 0; attempt < 8; attempt++) {
+                    const candidateX = padding + Math.random() * (maxX - padding);
+                    const candidateY = minY + Math.random() * (maxY - minY);
+                    const dist = Math.hypot(
+                        candidateX + btnW / 2 - pointerX,
+                        candidateY + btnH / 2 - pointerY
+                    );
+                    if (dist > 170) {
+                        newX = candidateX;
+                        newY = candidateY;
+                        break;
+                    }
+                }
+
+                const tilt = (Math.random() - 0.5) * 22;
+                runawayBtn.style.left = `${newX}px`;
+                runawayBtn.style.top = `${newY}px`;
+                runawayBtn.style.transform = `rotate(${tilt}deg) scale(1.06)`;
+                setTimeout(() => {
+                    runawayBtn.style.transform = 'rotate(0deg) scale(1)';
+                }, 260);
+
+                spawnParticle(rect.left + btnW / 2, rect.top + btnH / 2, false);
+            }
+
+            // Отслеживаем приближение курсора заранее (за 95px до кнопки)
+            document.addEventListener('mousemove', (e) => {
+                if (!runawayActive) return;
+                const rect = runawayBtn.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const distance = Math.hypot(e.clientX - centerX, e.clientY - centerY);
+                if (distance < 95) {
+                    escapeButton(e.clientX, e.clientY);
+                }
+            });
+
+            // Защита от клика, фокуса и касания на телефоне
+            runawayBtn.addEventListener('pointerenter', (e) => escapeButton(e.clientX, e.clientY));
+            runawayBtn.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                escapeButton(e.clientX, e.clientY);
+            });
+            runawayBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                escapeButton(touch ? touch.clientX : 0, touch ? touch.clientY : 0);
+            }, { passive: false });
+            runawayBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                escapeButton(e.clientX, e.clientY);
+            });
+
+            function updateCatMood(stage) {
+                catWrapper.classList.remove('mood-0', 'mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-5');
+                catWrapper.classList.add(`mood-${stage}`);
+                const percent = Math.min((stage / MAX_PETS) * 100, 100);
+                progressFill.style.width = `${percent}%`;
+                stepCounter.textContent = `${stage} / ${MAX_PETS}`;
+                moodLabel.textContent = moodDescriptions[stage] || moodDescriptions[5];
+
+                heartSteps.forEach((heart, idx) => {
+                    if (idx < stage) {
+                        heart.classList.add('filled', 'text-rose-400');
+                        heart.classList.remove('text-slate-500/80');
+                    } else {
+                        heart.classList.remove('filled', 'text-rose-400');
+                        heart.classList.add('text-slate-500/80');
+                    }
+                });
+
+                const glowScale = 0.75 + stage * 0.16;
+                const glowOpacity = Math.min(0.45 + stage * 0.12, 1);
+                ambientGlow.style.transform = `translate(-50%, -50%) scale(${glowScale})`;
+                ambientGlow.style.opacity = glowOpacity;
+
+                if (stage === 0) {
+                    eyesOpen.style.opacity = '1';
+                    eyesHappy.style.opacity = '0';
+                    mouthSad.style.opacity = '1';
+                    mouthHappy.style.opacity = '0';
+                    cheekLeft.style.opacity = '0';
+                    cheekRight.style.opacity = '0';
+                    pupilL.setAttribute('cy', '104');
+                    pupilR.setAttribute('cy', '104');
+                    browL.style.opacity = '1';
+                    browR.style.opacity = '1';
+                } else if (stage === 1) {
+                    pupilL.setAttribute('cy', '100');
+                    pupilR.setAttribute('cy', '100');
+                    cheekLeft.style.opacity = '0.35';
+                    cheekRight.style.opacity = '0.35';
+                    browL.style.opacity = '0.5';
+                    browR.style.opacity = '0.5';
+                } else if (stage === 2) {
+                    mouthSad.style.opacity = '0';
+                    mouthHappy.style.opacity = '1';
+                    cheekLeft.style.opacity = '0.6';
+                    cheekRight.style.opacity = '0.6';
+                    browL.style.opacity = '0';
+                    browR.style.opacity = '0';
+                } else if (stage === 3) {
+                    eyesOpen.style.opacity = '0';
+                    eyesHappy.style.opacity = '1';
+                    cheekLeft.style.opacity = '0.85';
+                    cheekRight.style.opacity = '0.85';
+                } else if (stage === 4) {
+                    cheekLeft.style.opacity = '1';
+                    cheekRight.style.opacity = '1';
+                } else if (stage >= 5) {
+                    catWrapper.classList.remove('pose-sitting');
+                    catWrapper.classList.add('pose-standing');
+                    messageBox.style.opacity = '0';
+                    messageBox.style.transform = 'translateY(-6px)';
+                    setTimeout(() => {
+                        mainTitle.textContent = 'Спасибо большое!';
+                        subTitle.textContent = 'Ангелина, вам бы тоже немножко отдохнуть';
+                        subTitle.classList.remove('text-rose-200/95');
+                        subTitle.classList.add('text-amber-200');
+                        messageBox.style.opacity = '1';
+                        messageBox.style.transform = 'translateY(0)';
+                    }, 380);
+                    celebrateBurst();
+
+                    if (leaveTimer) clearTimeout(leaveTimer);
+                    leaveTimer = setTimeout(() => {
+                        isReadyToPet = false;
+                        isPointerDown = false;
+                        catWrapper.classList.remove('petting-squash', 'arrived');
+                        catWrapper.classList.add('walking', 'leaving');
+                        ambientGlow.style.opacity = '0.25';
+                    }, 3400);
+
+                    // Появляется убегающая кнопка после ухода котика
+                    setTimeout(() => {
+                        showRunawayButton();
+                    }, 4900);
+                }
+            }
+
+            function handlePetMove(clientX, clientY) {
+                if (!isReadyToPet || !isPointerDown) return;
+                const dx = clientX - lastX;
+                const dy = clientY - lastY;
+                const dist = Math.hypot(dx, dy);
+                lastX = clientX;
+                lastY = clientY;
+                strokeDistance += dist;
+                const now = Date.now();
+                if (now - particleThrottle > 110 && dist > 2) {
+                    spawnParticle(clientX, clientY - 12, false);
+                    particleThrottle = now;
+                }
+                if (strokeDistance >= STROKE_THRESHOLD && (now - lastPetTimestamp > PET_COOLDOWN)) {
+                    strokeDistance = 0;
+                    lastPetTimestamp = now;
+                    gestureHint.style.opacity = '0';
+                    if (navigator.vibrate) {
+                        navigator.vibrate(25);
+                    }
+                    playSoftPurr(Math.min(petCount + 1, 5));
+                    if (petCount < MAX_PETS) {
+                        petCount++;
+                        updateCatMood(petCount);
+                    } else {
+                        spawnParticle(clientX, clientY - 18, true);
+                    }
+                }
+            }
+
+            catWrapper.addEventListener('pointerdown', (e) => {
+                if (!isReadyToPet) return;
+                isPointerDown = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                strokeDistance = 0;
+                catWrapper.classList.add('petting-squash');
+                try {
+                    catWrapper.setPointerCapture(e.pointerId);
+                } catch (err) {}
+            });
+
+            catWrapper.addEventListener('pointermove', (e) => {
+                if (!isPointerDown) return;
+                handlePetMove(e.clientX, e.clientY);
+            });
+
+            function endPointer(e) {
+                if (!isPointerDown) return;
+                isPointerDown = false;
+                strokeDistance = 0;
+                catWrapper.classList.remove('petting-squash');
+                try {
+                    if (e.pointerId && catWrapper.hasPointerCapture(e.pointerId)) {
+                        catWrapper.releasePointerCapture(e.pointerId);
+                    }
+                } catch (err) {}
+            }
+
+            catWrapper.addEventListener('pointerup', endPointer);
+            catWrapper.addEventListener('pointercancel', endPointer);
+
+            function startEntranceSequence() {
+                if (leaveTimer) clearTimeout(leaveTimer);
+                petCount = 0;
+                isReadyToPet = false;
+                strokeDistance = 0;
+                runawayActive = false;
+                runawayBtn.classList.remove('visible');
+
+                messageBox.style.opacity = '0';
+                messageBox.style.transform = 'translateY(8px)';
+                progressPanel.style.opacity = '0';
+                progressPanel.style.transform = 'translateY(12px)';
+                gestureHint.style.opacity = '0';
+
+                mainTitle.textContent = 'Котику тоже грустно.';
+                subTitle.textContent = 'Погладь, чтобы ему стало весело';
+                subTitle.classList.remove('text-amber-200');
+                subTitle.classList.add('text-rose-200/95');
+
+                catWrapper.classList.remove('arrived', 'leaving', 'pose-standing');
+                catWrapper.classList.add('walking', 'pose-sitting');
+                updateCatMood(0);
+
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        catWrapper.classList.add('arrived');
+                    }, 150);
+                });
+
+                setTimeout(() => {
+                    catWrapper.classList.remove('walking');
+                }, 2200);
+
+                setTimeout(() => {
+                    messageBox.style.opacity = '1';
+                    messageBox.style.transform = 'translateY(0)';
+                    progressPanel.style.opacity = '1';
+                    progressPanel.style.transform = 'translateY(0)';
+                    isReadyToPet = true;
+                }, 2500);
+
+                setTimeout(() => {
+                    if (petCount === 0 && isReadyToPet) {
+                        gestureHint.style.opacity = '1';
+                    }
+                }, 4200);
+            }
+
+            muteBtn.addEventListener('click', () => {
+                isMuted = !isMuted;
+                iconSoundOn.classList.toggle('hidden', isMuted);
+                iconSoundOff.classList.toggle('hidden', !isMuted);
+            });
+
+            createStars();
+            startEntranceSequence();
+        })();
+    </script>
+</body>
+</html>
